@@ -1,0 +1,11 @@
+.venv/
+node_modules/
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+.env
+.incoming/*
+!.incoming/.gitkeep
+.DS_Store
+*.log

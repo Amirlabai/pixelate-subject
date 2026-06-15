@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pixelate Subject</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header-row">
+          <h1>Pixelate Subject</h1>
+          <p class="subtitle">Import or capture, tweak the selection, then pixelate and export. Ctrl + wheel zoom; Ctrl + 0 fit zoom; Ctrl + Z undo brush; wheel pan; Shift + wheel pan sideways.</p>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="sidebar sidebar-left">
+          <section class="panel">
+            <h2>Import</h2>
+            <div id="drop-zone" class="drop-zone" tabindex="0">
+              <p>Drag and drop a photo here</p>
+              <p class="hint">or click to browse</p>
+              <input id="file-input" type="file" accept="image/jpeg,image/png,image/webp" hidden />
+            </div>
+            <div class="button-row image-actions">
+              <button id="btn-webcam" type="button">Webcam</button>
+            </div>
+            <div id="webcam-panel" class="webcam-panel hidden">
+              <video id="webcam-video" class="webcam-video" autoplay playsinline muted></video>
+              <div class="button-row">
+                <button id="btn-webcam-capture" type="button">Capture photo</button>
+                <button id="btn-webcam-cancel" type="button">Cancel</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <h2>Actions</h2>
+            <div class="button-row">
+              <button id="btn-detect" type="button" disabled>Detect Subject</button>
+            </div>
+            <div class="button-row">
+              <button id="btn-reset-mask" type="button" disabled>Reset Mask</button>
+            </div>
+            <p id="status" class="status" role="status"></p>
+          </section>
+
+          <section class="panel">
+            <h2>Selection</h2>
+            <label class="field">
+              <span>Detection model</span>
+              <select id="param-model" class="select-input">
+                <option value="general">General</option>
+                <option value="people">People</option>
+                <option value="fast">Fast</option>
+              </select>
+            </label>
+
+            <label class="field checkbox">
+              <input id="param-alpha-matting" type="checkbox" />
+              <span>Refine edges (slower)</span>
+            </label>
+
+            <label class="field">
+              <span>Cutoff <strong id="val-threshold">100</strong></span>
+              <input id="param-threshold" type="range" min="30" max="200" value="100" disabled />
+            </label>
+            <p class="field-hint">Higher = tighter selection. Live after detection.</p>
+
+            <label class="field">
+              <span>Grow / shrink <strong id="val-expand">0</strong> px</span>
+              <input id="param-expand" type="range" min="-12" max="12" value="0" disabled />
+            </label>
+          </section>
+
+          <section class="panel">
+            <h2>Mask editor</h2>
+            <div class="brush-tools">
+              <button id="brush-add" type="button" class="tool-btn active" disabled>Add to selection</button>
+              <button id="brush-remove" type="button" class="tool-btn" disabled>Remove from selection</button>
+              <button id="btn-undo" type="button" disabled>Undo</button>
+            </div>
+
+            <label class="field">
+              <span>Brush size <strong id="val-brush">24</strong> px</span>
+              <input id="param-brush" type="range" min="5" max="80" value="24" />
+            </label>
+
+            <label class="field checkbox">
+              <input id="param-show-selection" type="checkbox" checked />
+              <span>Show selection overlay</span>
+            </label>
+
+            <label class="field">
+              <span>Overlay opacity <strong id="val-overlay">40</strong>%</span>
+              <input id="param-overlay" type="range" min="10" max="80" value="40" />
+            </label>
+          </section>
+        </aside>
+
+        <section class="workspace">
+          <div id="canvas-wrap" class="canvas-wrap">
+            <div class="canvas-scroll-content">
+              <div class="canvas-stack">
+                <canvas id="main-canvas"></canvas>
+                <canvas id="brush-cursor"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <aside class="sidebar sidebar-right">
+          <section class="panel">
+            <h2>Pixelation</h2>
+            <label class="field">
+              <span>Pixelate target</span>
+              <div class="radio-row">
+                <label><input type="radio" name="target" value="subject" checked /> Subject</label>
+                <label><input type="radio" name="target" value="background" /> Background</label>
+                <label><input type="radio" name="target" value="full" /> Full image</label>
+              </div>
+            </label>
+
+            <label class="field">
+              <span>Block size <strong id="val-block-size">16</strong> px</span>
+              <input id="param-block-size" type="range" min="4" max="64" value="16" />
+            </label>
+
+            <label class="field">
+              <span>Edge feather <strong id="val-feather">4</strong> px</span>
+              <input id="param-feather" type="range" min="0" max="20" value="4" />
+            </label>
+
+            <label class="field">
+              <span>Subject saturation <strong id="val-subject-sat">100</strong>%</span>
+              <input id="param-subject-sat" type="range" min="0" max="200" value="100" />
+            </label>
+
+            <label class="field">
+              <span>Background saturation <strong id="val-background-sat">100</strong>%</span>
+              <input id="param-background-sat" type="range" min="0" max="200" value="100" />
+            </label>
+
+            <label class="field">
+              <span>Preview</span>
+              <div class="radio-row">
+                <label><input type="radio" name="preview" value="original" checked /> Original</label>
+                <label><input type="radio" name="preview" value="result" /> Result</label>
+              </div>
+            </label>
+
+            <div class="button-row panel-action">
+              <button id="btn-apply" type="button" disabled>Apply Pixelation</button>
+            </div>
+          </section>
+
+          <section class="panel panel-export">
+            <h2>Export</h2>
+            <button id="btn-download" type="button" class="export-btn" disabled>Download Result</button>
+          </section>
+        </aside>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
