@@ -17,3 +17,5 @@
 
 - Manual test with varied photos (portraits, objects, busy backgrounds)
 - Optional: polygon lasso, server-side export at full resolution
+
+s
