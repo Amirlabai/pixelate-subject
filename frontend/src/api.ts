@@ -28,15 +28,42 @@ export async function segmentImage(file: File, options: SegmentOptions): Promise
   return response.blob();
 }
 
-export async function checkHealth(): Promise<boolean> {
+export async function checkHealth(): Promise<{ ok: boolean; ffmpeg: boolean }> {
   try {
     const response = await fetch("/api/health");
-    if (!response.ok) return false;
-    const body = (await response.json()) as { ok?: boolean };
-    return body.ok === true;
+    if (!response.ok) return { ok: false, ffmpeg: false };
+    const body = (await response.json()) as { ok?: boolean; ffmpeg?: boolean };
+    return { ok: body.ok === true, ffmpeg: body.ffmpeg === true };
   } catch {
-    return false;
+    return { ok: false, ffmpeg: false };
   }
+}
+
+export async function renderVideo(frames: Blob[], fps: number): Promise<Blob> {
+  const form = new FormData();
+  form.append("fps", String(fps));
+  // Repeated "frames" parts — FastAPI collects them as list[UploadFile]; order must match frame index
+  for (let i = 0; i < frames.length; i++) {
+    form.append("frames", frames[i], `frame_${i}.png`);
+  }
+
+  const response = await fetch("/api/render-video", {
+    method: "POST",
+    body: form,
+  });
+
+  if (!response.ok) {
+    let detail = response.statusText;
+    try {
+      const body = (await response.json()) as { detail?: string };
+      if (body.detail) detail = body.detail;
+    } catch {
+      // ignore JSON parse errors
+    }
+    throw new Error(detail);
+  }
+
+  return response.blob();
 }
 
 export function loadImageFromFile(file: File): Promise<HTMLImageElement> {

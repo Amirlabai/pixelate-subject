@@ -1,6 +1,7 @@
 import type { AppParams, BrushMode } from "./state";
 import { buildSelectionOverlay } from "./pixelate";
 import type { MaskEditor } from "./mask-editor";
+import { drawCropOverlay, type CropRect } from "./crop-editor";
 
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 8;
@@ -131,7 +132,7 @@ export class CanvasView {
     this.brushCursor.hide();
   }
 
-  render(params: AppParams): void {
+  render(params: AppParams, cropOverlay?: { active: boolean; rect: CropRect | null }): void {
     if (!this.sourceCanvas) {
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       return;
@@ -143,9 +144,13 @@ export class CanvasView {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     this.ctx.drawImage(base, 0, 0);
 
-    if (!showResult && params.showSelection && this.maskEditor) {
+    if (!showResult && params.showSelection && this.maskEditor && !cropOverlay?.active) {
       const overlay = buildSelectionOverlay(this.maskEditor.canvas, params.overlayOpacity);
       this.ctx.drawImage(overlay, 0, 0);
+    }
+
+    if (!showResult && cropOverlay?.active && cropOverlay.rect) {
+      drawCropOverlay(this.ctx, cropOverlay.rect, this.canvas.width, this.canvas.height);
     }
 
     this.applyDisplayScale();
@@ -200,6 +205,26 @@ export class CanvasView {
   resetZoomToDefault(): void {
     this.resetZoom();
     this.applyDisplayScale();
+  }
+
+  zoomIn(): void {
+    this.zoomBy(ZOOM_FACTOR);
+  }
+
+  zoomOut(): void {
+    this.zoomBy(1 / ZOOM_FACTOR);
+  }
+
+  private zoomBy(factor: number): void {
+    if (!this.sourceCanvas || !this.wrap) return;
+    const oldScale = this.displayScale;
+    this.userZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, this.userZoom * factor));
+    this.applyDisplayScale();
+    const ratio = this.displayScale / oldScale;
+    const cx = this.wrap.clientWidth / 2;
+    const cy = this.wrap.clientHeight / 2;
+    this.wrap.scrollLeft = (this.wrap.scrollLeft + cx) * ratio - cx;
+    this.wrap.scrollTop = (this.wrap.scrollTop + cy) * ratio - cy;
   }
 
   private resetZoom(): void {

@@ -6,6 +6,7 @@ Local web tool to upload a photo, automatically detect the subject with rembg, r
 
 - Python 3.10+
 - Node.js 18+
+- ffmpeg on PATH (for video export)
 
 ## Quick start
 
@@ -46,6 +47,8 @@ npm run dev
 5. Set **Pixelate target** to Subject or Background.
 6. Adjust **Block size** and **Edge feather**.
 7. Click **Apply Pixelation**, switch preview to **Result**, and **Download Result**.
+8. Optionally click **Crop** to trim the frame (before or after masking), then **Apply crop**.
+9. Set **Video duration**, then click **Generate Video** to download an MP4. Block size animates from 4 px to 64 px (default easing: ease out — slow at the end). Requires ffmpeg on PATH.
 
 ## Parameters
 
@@ -62,16 +65,39 @@ npm run dev
 | Overlay opacity | Strength of the selection overlay |
 | Brush size | Mask refinement stroke width (circle shown on image) |
 | Preview | Original (with overlay) or Result |
+| Video duration | Length of animated export (1–5 s, default 2 s) |
 
 ## API
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/health` | GET | Health check |
+| `/api/health` | GET | Health check (`ok`, `ffmpeg`) |
 | `/api/segment` | POST | Upload image, returns grayscale mask PNG |
+| `/api/render-video` | POST | Upload PNG frames + fps, returns MP4 |
 
 ## Architecture
 
 - **Frontend** — Vite + TypeScript on port 5173
 - **Backend** — FastAPI + rembg on port 8000
-- Segmentation is server-side; pixelation and mask editing are client-side.
+- Segmentation and video encoding are server-side; pixelation, mask editing, crop, and frame rendering are client-side.
+
+## Versioning
+
+Releases are automated on push to `main` via [`.github/workflows/release.yml`](.github/workflows/release.yml). Commit messages (on `main`) drive semver:
+
+| Prefix | Bump | Example |
+|--------|------|---------|
+| `fix:` | patch | `fix: crop epsilon on full frame` |
+| `feat:` | minor | `feat: animated MP4 export` |
+| `major:` | major | `major: drop legacy mask API` |
+
+Also triggers a major bump: `BREAKING CHANGE` in the body, or `!` after the type (`feat!: …`).
+
+PR titles are checked by [`.github/workflows/pull-request.yml`](.github/workflows/pull-request.yml) (`feat`, `fix`, `major`, `chore`, `docs`, `ci`, `refactor`). Prefer **squash merge** so the PR title becomes the release commit.
+
+Current version is in [`VERSION`](VERSION). To start from `1.0.0`, tag once before the first automated release:
+
+```powershell
+git tag v1.0.0
+git push origin v1.0.0
+```

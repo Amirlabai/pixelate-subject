@@ -31,10 +31,6 @@ export class WebcamCapture {
     }
   }
 
-  isActive(): boolean {
-    return this.stream !== null;
-  }
-
   async capture(video: HTMLVideoElement): Promise<File> {
     const w = video.videoWidth;
     const h = video.videoHeight;

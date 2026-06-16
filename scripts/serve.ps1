@@ -14,10 +14,11 @@ Write-Host "Installing Python dependencies..."
 & $Python -m pip install -q -r requirements.txt
 
 $backendJob = Start-Job -ScriptBlock {
-    param($py, $root)
+    param($py, $root, $pathEnv)
+    $env:Path = $pathEnv
     Set-Location $root
     & $py -m uvicorn backend.app:app --reload --port 8000 2>&1
-} -ArgumentList $Python, $Root
+} -ArgumentList $Python, $Root, $env:Path
 
 Start-Sleep -Seconds 2
 

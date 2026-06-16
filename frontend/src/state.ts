@@ -2,6 +2,13 @@ export type PixelateTarget = "subject" | "background" | "full";
 export type PreviewMode = "original" | "result";
 export type BrushMode = "add" | "remove";
 export type SegmentModel = "general" | "people" | "fast";
+export type VideoEasing =
+  | "linear"
+  | "ease-in"
+  | "ease-out"
+  | "ease-in-out"
+  | "ease-in-cubic"
+  | "ease-out-cubic";
 
 export interface AppParams {
   target: PixelateTarget;
@@ -17,17 +24,17 @@ export interface AppParams {
   maskExpand: number;
   subjectSaturation: number;
   backgroundSaturation: number;
+  videoDurationSec: number;
+  videoEasing: VideoEasing;
 }
 
 export interface AppState {
-  sourceFile: File | null;
-  sourceImage: HTMLImageElement | null;
   maskCanvas: HTMLCanvasElement | null;
   resultCanvas: HTMLCanvasElement | null;
-  originalMaskSnapshot: ImageData | null;
   params: AppParams;
   brushMode: BrushMode;
   hasResult: boolean;
+  cropMode: boolean;
 }
 
 export function createDefaultParams(): AppParams {
@@ -45,19 +52,19 @@ export function createDefaultParams(): AppParams {
     maskExpand: 0,
     subjectSaturation: 100,
     backgroundSaturation: 100,
+    videoDurationSec: 2,
+    videoEasing: "ease-out",
   };
 }
 
 export function createInitialState(): AppState {
   return {
-    sourceFile: null,
-    sourceImage: null,
     maskCanvas: null,
     resultCanvas: null,
-    originalMaskSnapshot: null,
     params: createDefaultParams(),
     brushMode: "add",
     hasResult: false,
+    cropMode: false,
   };
 }
 

@@ -32,11 +32,6 @@ export class MaskEditor {
     this.undoStack = [];
   }
 
-  loadFromImage(img: HTMLImageElement): void {
-    this.ctx.drawImage(img, 0, 0, this.canvas.width, this.canvas.height);
-    this.undoStack = [];
-  }
-
   snapshot(): ImageData {
     return this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
   }

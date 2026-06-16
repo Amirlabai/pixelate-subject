@@ -11,15 +11,34 @@
       <header class="header">
         <div class="header-row">
           <h1>Pixelate Subject</h1>
-          <p class="subtitle">Import or capture, tweak the selection, then pixelate and export. Ctrl + wheel zoom; Ctrl + 0 fit zoom; Ctrl + Z undo brush; wheel pan; Shift + wheel pan sideways.</p>
+          <p class="subtitle">Import a photo, refine the selection, pixelate, and export.</p>
+          <span id="app-version" class="app-version" aria-label="Application version"></span>
         </div>
+        <details class="keyboard-help">
+          <summary>Keyboard shortcuts</summary>
+          <ul>
+            <li>Ctrl + wheel — zoom in/out on the image</li>
+            <li>Ctrl + 0 — reset zoom to fit</li>
+            <li>Ctrl + + / Ctrl + − — zoom in/out</li>
+            <li>Ctrl + Z — undo brush stroke</li>
+            <li>Wheel — pan (when zoomed)</li>
+            <li>Shift + wheel — pan sideways</li>
+          </ul>
+        </details>
       </header>
 
       <main class="layout">
-        <aside class="sidebar sidebar-left">
+        <aside class="sidebar sidebar-left" aria-label="Import and selection">
           <section class="panel">
             <h2>Import</h2>
-            <div id="drop-zone" class="drop-zone" tabindex="0">
+            <div
+              id="drop-zone"
+              class="drop-zone"
+              tabindex="0"
+              role="button"
+              aria-label="Import image: drag and drop or browse"
+              aria-controls="file-input"
+            >
               <p>Drag and drop a photo here</p>
               <p class="hint">or click to browse</p>
               <input id="file-input" type="file" accept="image/jpeg,image/png,image/webp" hidden />
@@ -28,23 +47,19 @@
               <button id="btn-webcam" type="button">Webcam</button>
             </div>
             <div id="webcam-panel" class="webcam-panel hidden">
-              <video id="webcam-video" class="webcam-video" autoplay playsinline muted></video>
+              <video
+                id="webcam-video"
+                class="webcam-video"
+                autoplay
+                playsinline
+                muted
+                aria-label="Webcam preview"
+              ></video>
               <div class="button-row">
                 <button id="btn-webcam-capture" type="button">Capture photo</button>
                 <button id="btn-webcam-cancel" type="button">Cancel</button>
               </div>
             </div>
-          </section>
-
-          <section class="panel">
-            <h2>Actions</h2>
-            <div class="button-row">
-              <button id="btn-detect" type="button" disabled>Detect Subject</button>
-            </div>
-            <div class="button-row">
-              <button id="btn-reset-mask" type="button" disabled>Reset Mask</button>
-            </div>
-            <p id="status" class="status" role="status"></p>
           </section>
 
           <section class="panel">
@@ -63,11 +78,23 @@
               <span>Refine edges (slower)</span>
             </label>
 
+            <div class="button-row">
+              <button id="btn-detect" type="button" disabled>Detect Subject</button>
+            </div>
+
             <label class="field">
               <span>Cutoff <strong id="val-threshold">100</strong></span>
-              <input id="param-threshold" type="range" min="30" max="200" value="100" disabled />
+              <input
+                id="param-threshold"
+                type="range"
+                min="30"
+                max="200"
+                value="100"
+                disabled
+                aria-describedby="hint-threshold"
+              />
             </label>
-            <p class="field-hint">Higher = tighter selection. Live after detection.</p>
+            <p id="hint-threshold" class="field-hint">Run Detect Subject first. Higher = tighter selection.</p>
 
             <label class="field">
               <span>Grow / shrink <strong id="val-expand">0</strong> px</span>
@@ -75,11 +102,39 @@
             </label>
           </section>
 
+          <section class="panel panel-crop">
+            <h2>Crop</h2>
+            <div class="button-row">
+              <button id="btn-crop" type="button" disabled>Crop</button>
+            </div>
+            <div id="crop-actions" class="crop-actions hidden">
+              <label class="field">
+                <span>Aspect ratio</span>
+                <select id="param-crop-aspect" class="select-input"></select>
+              </label>
+              <div class="button-row">
+                <button id="btn-crop-apply" type="button">Apply crop</button>
+                <button id="btn-crop-cancel" type="button">Cancel</button>
+              </div>
+            </div>
+            <p class="field-hint">Optional. Trim the image anytime before export.</p>
+          </section>
+
           <section class="panel">
             <h2>Mask editor</h2>
             <div class="brush-tools">
-              <button id="brush-add" type="button" class="tool-btn active" disabled>Add to selection</button>
-              <button id="brush-remove" type="button" class="tool-btn" disabled>Remove from selection</button>
+              <button
+                id="brush-add"
+                type="button"
+                class="tool-btn active"
+                disabled
+                aria-pressed="true"
+              >
+                Add to selection
+              </button>
+              <button id="brush-remove" type="button" class="tool-btn" disabled aria-pressed="false">
+                Remove from selection
+              </button>
               <button id="btn-undo" type="button" disabled>Undo</button>
             </div>
 
@@ -97,31 +152,42 @@
               <span>Overlay opacity <strong id="val-overlay">40</strong>%</span>
               <input id="param-overlay" type="range" min="10" max="80" value="40" />
             </label>
+
+            <div class="button-row">
+              <button id="btn-reset-mask" type="button" disabled>Reset Mask</button>
+            </div>
           </section>
+
+          <p id="status" class="status" role="status" aria-live="polite"></p>
         </aside>
 
-        <section class="workspace">
+        <section class="workspace" aria-label="Image workspace">
           <div id="canvas-wrap" class="canvas-wrap">
+            <p id="canvas-empty" class="canvas-empty">Import a photo to start</p>
             <div class="canvas-scroll-content">
               <div class="canvas-stack">
-                <canvas id="main-canvas"></canvas>
-                <canvas id="brush-cursor"></canvas>
+                <canvas
+                  id="main-canvas"
+                  role="img"
+                  aria-label="Image workspace — import a photo to begin"
+                ></canvas>
+                <canvas id="brush-cursor" aria-hidden="true"></canvas>
               </div>
             </div>
           </div>
         </section>
 
-        <aside class="sidebar sidebar-right">
+        <aside class="sidebar sidebar-right" aria-label="Pixelation and export">
           <section class="panel">
             <h2>Pixelation</h2>
-            <label class="field">
-              <span>Pixelate target</span>
+            <fieldset class="field fieldset">
+              <legend>Pixelate target</legend>
               <div class="radio-row">
                 <label><input type="radio" name="target" value="subject" checked /> Subject</label>
                 <label><input type="radio" name="target" value="background" /> Background</label>
                 <label><input type="radio" name="target" value="full" /> Full image</label>
               </div>
-            </label>
+            </fieldset>
 
             <label class="field">
               <span>Block size <strong id="val-block-size">16</strong> px</span>
@@ -143,13 +209,19 @@
               <input id="param-background-sat" type="range" min="0" max="200" value="100" />
             </label>
 
-            <label class="field">
-              <span>Preview</span>
+            <fieldset class="field fieldset">
+              <legend>Preview</legend>
               <div class="radio-row">
-                <label><input type="radio" name="preview" value="original" checked /> Original</label>
-                <label><input type="radio" name="preview" value="result" /> Result</label>
+                <label
+                  ><input id="preview-original" type="radio" name="preview" value="original" checked />
+                  Original</label
+                >
+                <label
+                  ><input id="preview-result" type="radio" name="preview" value="result" disabled />
+                  Result (after Apply)</label
+                >
               </div>
-            </label>
+            </fieldset>
 
             <div class="button-row panel-action">
               <button id="btn-apply" type="button" disabled>Apply Pixelation</button>
@@ -158,6 +230,21 @@
 
           <section class="panel panel-export">
             <h2>Export</h2>
+            <label class="field">
+              <span>Video duration <strong id="val-video-duration">2</strong> s</span>
+              <input id="param-video-duration" type="range" min="1" max="5" value="2" step="0.5" />
+            </label>
+            <label class="field">
+              <span>Block size easing</span>
+              <select id="param-video-easing" class="select-input"></select>
+            </label>
+            <p class="field-hint">
+              30 fps, block size 4→64 px. Needs a selection unless target is Full image.
+            </p>
+            <p id="video-export-hint" class="field-hint video-export-hint hidden"></p>
+            <button id="btn-generate-video" type="button" class="export-btn" disabled>
+              Generate Video
+            </button>
             <button id="btn-download" type="button" class="export-btn" disabled>Download Result</button>
           </section>
         </aside>
