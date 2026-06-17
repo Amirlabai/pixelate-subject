@@ -20,6 +20,8 @@
 - Smoke test + review fixes (upload caps, PNG validation, ffmpeg timeout, easing docs, crop/video UX guards)
 - UX/a11y pass: panel reorder, keyboard help, focus rings, empty state, fieldsets, aria labels, select single-source
 - Semantic release GitHub Actions (`fix`/`feat`/`major` → semver tags + releases)
+- Layer-overlay pixelation: sharp + pixelated layers; subject mode uses outward fill + dilated block inclusion; background uses full pixelate + sharp subject overlay
+- Server-side video export: `POST /api/pixelate-video` renders all frames on backend (Pillow/numpy) then ffmpeg; browser uploads source + mask once
 
 ## Next steps
 

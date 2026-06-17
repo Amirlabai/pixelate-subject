@@ -3,4 +3,5 @@ uvicorn[standard]
 python-multipart
 pillow
 numpy
+scipy
 rembg[cpu]

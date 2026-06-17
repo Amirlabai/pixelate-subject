@@ -1,4 +1,5 @@
 import type { PixelateTarget } from "./state";
+import { dilateBinaryMask } from "./mask-postprocess";
 
 function clampByte(v: number): number {
   return Math.max(0, Math.min(255, Math.round(v)));
@@ -138,6 +139,165 @@ function featherMask(maskData: ImageData, radius: number): Uint8ClampedArray {
   return out;
 }
 
+function fillOutwardUnderMask(
+  image: ImageData,
+  mask: ImageData,
+  radius: number,
+  threshold = 128,
+): ImageData {
+  const { width, height } = image;
+  const out = new ImageData(width, height);
+  out.data.set(image.data);
+
+  if (radius <= 0) return out;
+
+  const size = width * height;
+  const extended = new Uint8Array(size);
+  for (let i = 0; i < size; i++) {
+    extended[i] = mask.data[i * 4] >= threshold ? 1 : 0;
+  }
+
+  const dst = out.data;
+
+  for (let step = 0; step < radius; step++) {
+    const prev = new Uint8Array(extended);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = y * width + x;
+        if (prev[i]) continue;
+
+        const o = i * 4;
+        let no = -1;
+
+        if (x > 0 && prev[i - 1]) no = (i - 1) * 4;
+        else if (x < width - 1 && prev[i + 1]) no = (i + 1) * 4;
+        else if (y > 0 && prev[i - width]) no = (i - width) * 4;
+        else if (y < height - 1 && prev[i + width]) no = (i + width) * 4;
+
+        if (no >= 0) {
+          dst[o] = dst[no];
+          dst[o + 1] = dst[no + 1];
+          dst[o + 2] = dst[no + 2];
+          extended[i] = 1;
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
+function imageDataToCanvas(data: ImageData): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = data.width;
+  canvas.height = data.height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not create canvas");
+  ctx.putImageData(data, 0, 0);
+  return canvas;
+}
+
+function compositeBlockAligned(
+  sharp: ImageData,
+  pixelated: ImageData,
+  mask: ImageData,
+  blockSize: number,
+  target: Exclude<PixelateTarget, "full">,
+  threshold = 128,
+): ImageData {
+  const { width, height } = sharp;
+  const out = new ImageData(width, height);
+  const dst = out.data;
+  const sharpD = sharp.data;
+  const pixD = pixelated.data;
+  const maskD = mask.data;
+
+  for (let by = 0; by < height; by += blockSize) {
+    for (let bx = 0; bx < width; bx += blockSize) {
+      const bw = Math.min(blockSize, width - bx);
+      const bh = Math.min(blockSize, height - by);
+
+      const cx = bx + Math.floor(bw / 2);
+      const cy = by + Math.floor(bh / 2);
+      const inSubject = maskD[(cy * width + cx) * 4] >= threshold;
+
+      const usePixelated = target === "subject" ? inSubject : !inSubject;
+      const src = usePixelated ? pixD : sharpD;
+
+      for (let y = by; y < by + bh; y++) {
+        for (let x = bx; x < bx + bw; x++) {
+          const i = (y * width + x) * 4;
+          dst[i] = src[i];
+          dst[i + 1] = src[i + 1];
+          dst[i + 2] = src[i + 2];
+          dst[i + 3] = 255;
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
+function maskToAlphaCanvas(maskCanvas: HTMLCanvasElement): HTMLCanvasElement {
+  const width = maskCanvas.width;
+  const height = maskCanvas.height;
+  const maskCtx = maskCanvas.getContext("2d");
+  if (!maskCtx) throw new Error("Could not read mask");
+
+  const maskData = maskCtx.getImageData(0, 0, width, height);
+  const alphaData = maskCtx.createImageData(width, height);
+  for (let i = 0; i < width * height; i++) {
+    const o = i * 4;
+    const v = maskData.data[o];
+    alphaData.data[o] = 255;
+    alphaData.data[o + 1] = 255;
+    alphaData.data[o + 2] = 255;
+    alphaData.data[o + 3] = v;
+  }
+
+  const out = document.createElement("canvas");
+  out.width = width;
+  out.height = height;
+  out.getContext("2d")!.putImageData(alphaData, 0, 0);
+  return out;
+}
+
+function maskLayerWithAlpha(
+  layer: HTMLCanvasElement,
+  alphaMask: HTMLCanvasElement,
+): HTMLCanvasElement {
+  const out = document.createElement("canvas");
+  out.width = layer.width;
+  out.height = layer.height;
+  const ctx = out.getContext("2d");
+  if (!ctx) throw new Error("Could not mask layer");
+
+  ctx.drawImage(layer, 0, 0);
+  ctx.globalCompositeOperation = "destination-in";
+  ctx.drawImage(alphaMask, 0, 0);
+  ctx.globalCompositeOperation = "source-over";
+  return out;
+}
+
+function compositeBackgroundOverlay(
+  sharp: HTMLCanvasElement,
+  pixelated: HTMLCanvasElement,
+  maskCanvas: HTMLCanvasElement,
+): HTMLCanvasElement {
+  const alphaMask = maskToAlphaCanvas(maskCanvas);
+
+  const out = document.createElement("canvas");
+  out.width = sharp.width;
+  out.height = sharp.height;
+  const ctx = out.getContext("2d");
+  if (!ctx) throw new Error("Could not composite layers");
+
+  ctx.drawImage(pixelated, 0, 0);
+  ctx.drawImage(maskLayerWithAlpha(sharp, alphaMask), 0, 0);
+  return out;
+}
+
 export function applyPixelation(
   source: HTMLCanvasElement,
   maskCanvas: HTMLCanvasElement | null,
@@ -156,10 +316,11 @@ export function applyPixelation(
   const sourceData = srcCtx.getImageData(0, 0, width, height);
 
   let feathered: Uint8ClampedArray | null = null;
+  let maskData: ImageData | null = null;
   if (maskCanvas) {
     const maskCtx = maskCanvas.getContext("2d");
     if (!maskCtx) throw new Error("Could not read mask");
-    const maskData = maskCtx.getImageData(0, 0, width, height);
+    maskData = maskCtx.getImageData(0, 0, width, height);
     feathered = featherMask(maskData, feather);
   }
 
@@ -169,37 +330,27 @@ export function applyPixelation(
     subjectSaturation,
     backgroundSaturation,
   );
+
+  if (target === "full" || !maskData || !maskCanvas) {
+    return imageDataToCanvas(pixelateImageData(saturated, blockSize));
+  }
+
+  if (target === "subject") {
+    const fillRadius = Math.ceil(blockSize / 2);
+    const filled = fillOutwardUnderMask(saturated, maskData, fillRadius);
+    const pixelated = pixelateImageData(filled, blockSize);
+    const inclusionMask = dilateBinaryMask(maskData, fillRadius);
+    return imageDataToCanvas(
+      compositeBlockAligned(saturated, pixelated, inclusionMask, blockSize, target),
+    );
+  }
+
   const pixelated = pixelateImageData(saturated, blockSize);
-
-  const outCanvas = document.createElement("canvas");
-  outCanvas.width = width;
-  outCanvas.height = height;
-
-  if (target === "full" || !feathered) {
-    outCanvas.getContext("2d")!.putImageData(pixelated, 0, 0);
-    return outCanvas;
-  }
-
-  const out = outCanvas.getContext("2d")!.createImageData(width, height);
-  const dst = out.data;
-  const src = saturated.data;
-  const pix = pixelated.data;
-
-  for (let i = 0; i < width * height; i++) {
-    const o = i * 4;
-    let maskVal = feathered[i] / 255;
-    if (target === "background") {
-      maskVal = 1 - maskVal;
-    }
-
-    dst[o] = Math.round(src[o] * (1 - maskVal) + pix[o] * maskVal);
-    dst[o + 1] = Math.round(src[o + 1] * (1 - maskVal) + pix[o + 1] * maskVal);
-    dst[o + 2] = Math.round(src[o + 2] * (1 - maskVal) + pix[o + 2] * maskVal);
-    dst[o + 3] = 255;
-  }
-
-  outCanvas.getContext("2d")!.putImageData(out, 0, 0);
-  return outCanvas;
+  return compositeBackgroundOverlay(
+    imageDataToCanvas(saturated),
+    imageDataToCanvas(pixelated),
+    maskCanvas,
+  );
 }
 
 export function buildSelectionOverlay(

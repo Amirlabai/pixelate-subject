@@ -9,7 +9,11 @@ Pixelate Subject is a local web tool for privacy editing: upload a photo, auto-d
 - **Frontend** — Vite + TypeScript on `http://localhost:5173`
 - **Backend** — FastAPI + rembg on `http://localhost:8000`
 - Segmentation runs server-side; pixelation, mask editing, crop, and frame rendering run in the browser.
-- Video MP4 encoding runs server-side via ffmpeg (`POST /api/render-video`).
+- Video MP4 encoding runs server-side via ffmpeg (`POST /api/render-video` legacy; `POST /api/pixelate-video` renders frames on server then encodes).
+
+## Pixelation compositing
+
+Client-side pixelation (`frontend/src/pixelate.ts`) builds two full-image layers from the saturated composite: sharp and block-pixelated. **Subject** target extends subject colors outward under the mask edge (`fillRadius = ceil(blockSize / 2)`), pixelates that filled image, and composites per block using a dilated inclusion mask so edge blocks reclaim lost real estate (works for multiple mask blobs). **Background** target pixelates the whole image, then overlays the sharp subject masked on top. **Full** target pixelates the entire frame. Saturation edge feather applies only to the saturation blend.
 
 ## Key parameters
 
@@ -28,7 +32,7 @@ Pixelate Subject is a local web tool for privacy editing: upload a photo, auto-d
 |-----------|---------|-------|
 | Pixelate target | subject | subject / background / full |
 | Block size | 16 | 4–64 px (still export only; video animates 4→64) |
-| Edge feather | 4 | 0–20 px |
+| Saturation edge feather | 4 | 0–20 px; softens subject/background saturation split only (not pixel block edges) |
 | Show selection | on | checkbox |
 | Overlay opacity | 40% | 10–80% |
 | Brush size | 24 | 5–80 px (shown on canvas) |

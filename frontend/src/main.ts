@@ -63,6 +63,7 @@ class App {
   private cropEditor: CropEditor | null = null;
   private ffmpegAvailable = false;
   private isGeneratingVideo = false;
+  private isApplyingPixelation = false;
 
   constructor() {
     const canvas = getElAs<HTMLCanvasElement>("main-canvas");
@@ -147,7 +148,7 @@ class App {
     getEl("btn-webcam-cancel").addEventListener("click", () => this.stopWebcam());
 
     getEl("btn-detect").addEventListener("click", () => void this.detectSubject());
-    getEl("btn-apply").addEventListener("click", () => this.applyPixelation());
+    getEl("btn-apply").addEventListener("click", () => void this.applyPixelation());
     getEl("btn-reset-mask").addEventListener("click", () => this.resetMask());
     getEl("btn-download").addEventListener("click", () => this.downloadResult());
     getEl("btn-generate-video").addEventListener("click", () => void this.generateVideo());
@@ -211,7 +212,7 @@ class App {
         if (value === "subject" || value === "background" || value === "full") {
           this.state.params.target = value;
           this.updateButtons();
-          if (this.state.hasResult) this.applyPixelation(false);
+          if (this.state.hasResult) void this.applyPixelation(false);
         }
       });
     });
@@ -310,13 +311,12 @@ class App {
       label.textContent = format(value);
       input.setAttribute("aria-valuetext", valueText ? valueText(value) : format(value));
       if (
-        key === "blockSize" ||
         key === "feather" ||
         key === "subjectSaturation" ||
         key === "backgroundSaturation"
       ) {
         if (this.state.hasResult) {
-          this.applyPixelation(false);
+          void this.applyPixelation(false);
         }
       }
       if (key === "overlayOpacity") this.redraw();
@@ -324,9 +324,17 @@ class App {
     };
 
     input.addEventListener("input", () => apply(Number(input.value)));
+    if (key === "blockSize") {
+      input.addEventListener("change", () => {
+        if (this.state.hasResult) void this.applyPixelation(false);
+      });
+    }
     input.addEventListener("dblclick", (e) => {
       e.preventDefault();
       apply(defaults[key] as number);
+      if (key === "blockSize" && this.state.hasResult) {
+        void this.applyPixelation(false);
+      }
     });
   }
 
@@ -390,6 +398,12 @@ class App {
     getEl("val-expand").textContent = String(defaults.maskExpand);
   }
 
+  private flushUi(): Promise<void> {
+    return new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+  }
+
   private setStatus(message: string, kind: "" | "error" | "busy" | "warn" = ""): void {
     const el = getEl("status");
     el.textContent = message;
@@ -413,7 +427,8 @@ class App {
     const needsMask = this.state.params.target !== "full";
     const inCrop = this.state.cropMode;
     getElAs<HTMLButtonElement>("btn-detect").disabled = !hasImage || inCrop;
-    getElAs<HTMLButtonElement>("btn-apply").disabled = !hasImage || (needsMask && !hasSelection) || inCrop;
+    getElAs<HTMLButtonElement>("btn-apply").disabled =
+      !hasImage || (needsMask && !hasSelection) || inCrop || this.isApplyingPixelation || this.isGeneratingVideo;
     getElAs<HTMLButtonElement>("btn-reset-mask").disabled =
       !hasImage || (!hasSelection && !this.rawMaskData) || inCrop;
     getElAs<HTMLButtonElement>("btn-download").disabled = !this.state.hasResult || inCrop;
@@ -651,12 +666,35 @@ class App {
     if (this.state.params.target !== "full" && !this.maskEditor?.hasSelection()) return;
 
     const btn = getElAs<HTMLButtonElement>("btn-generate-video");
+    const progress = getElAs<HTMLProgressElement>("video-progress");
     const prevLabel = btn.textContent ?? "Generate Video";
     this.isGeneratingVideo = true;
     btn.disabled = true;
     btn.setAttribute("aria-busy", "true");
     btn.textContent = "Generating…";
+    progress.classList.remove("hidden");
+    progress.removeAttribute("value");
+    progress.setAttribute("value", "0");
     this.updateButtons();
+
+    const setVideoProgress = (frame: number, total: number, phase: "upload" | "render" | "encode") => {
+      if (phase === "upload") {
+        btn.textContent = "Uploading…";
+        progress.removeAttribute("value");
+        this.setStatus("Uploading image and mask to server…", "busy");
+        return;
+      }
+      if (phase === "encode") {
+        btn.textContent = "Encoding…";
+        progress.setAttribute("value", "100");
+        this.setStatus(`Encoding MP4 with ffmpeg (frame ${total}/${total})…`, "busy");
+        return;
+      }
+      const pct = total > 0 ? Math.round((frame / total) * 100) : 0;
+      btn.textContent = `Rendering ${frame}/${total}…`;
+      progress.setAttribute("value", String(pct));
+      this.setStatus(`Server rendering frame ${frame} of ${total}…`, "busy");
+    };
 
     try {
       const blob = await exportPixelateVideo({
@@ -664,13 +702,7 @@ class App {
         mask: this.maskEditor?.canvas ?? null,
         params: this.state.params,
         durationSec: this.state.params.videoDurationSec,
-        onProgress: (frame, total, phase) => {
-          if (phase === "render") {
-            this.setStatus(`Rendering frame ${frame}/${total}...`, "busy");
-          } else {
-            this.setStatus("Encoding video with ffmpeg...", "busy");
-          }
-        },
+        onProgress: setVideoProgress,
       });
 
       const url = URL.createObjectURL(blob);
@@ -686,6 +718,8 @@ class App {
       this.isGeneratingVideo = false;
       btn.removeAttribute("aria-busy");
       btn.textContent = prevLabel;
+      progress.classList.add("hidden");
+      progress.setAttribute("value", "0");
       this.updateButtons();
     }
   }
@@ -734,13 +768,22 @@ class App {
     }
   }
 
-  private applyPixelation(showStatus = true): void {
-    if (!this.sourceCanvas) return;
+  private async applyPixelation(showStatus = true): Promise<void> {
+    if (this.isApplyingPixelation || !this.sourceCanvas) return;
     if (this.state.params.target !== "full") {
       if (!this.maskEditor?.hasSelection()) return;
     } else if (!this.maskEditor) {
       return;
     }
+
+    const btn = getElAs<HTMLButtonElement>("btn-apply");
+    const prevLabel = btn.textContent ?? "Apply Pixelation";
+    this.isApplyingPixelation = true;
+    btn.setAttribute("aria-busy", "true");
+    btn.textContent = "Applying…";
+    this.setStatus("Applying pixelation in browser…", "busy");
+    this.updateButtons();
+    await this.flushUi();
 
     try {
       const result = applyPixelation(
@@ -762,6 +805,11 @@ class App {
       }
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : "Pixelation failed", "error");
+    } finally {
+      this.isApplyingPixelation = false;
+      btn.removeAttribute("aria-busy");
+      btn.textContent = prevLabel;
+      this.updateButtons();
     }
   }
 

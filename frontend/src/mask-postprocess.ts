@@ -25,6 +25,35 @@ export function processMask(raw: ImageData, threshold: number, expand: number): 
   return out;
 }
 
+export function dilateBinaryMask(
+  mask: ImageData,
+  radius: number,
+  threshold = 128,
+): ImageData {
+  const { width, height, data } = mask;
+  const size = width * height;
+  let values = new Uint8Array(size);
+
+  for (let i = 0; i < size; i++) {
+    values[i] = data[i * 4] >= threshold ? 255 : 0;
+  }
+
+  if (radius > 0) {
+    values = new Uint8Array(morphCircular(values, width, height, radius));
+  }
+
+  const out = new ImageData(width, height);
+  for (let i = 0; i < size; i++) {
+    const v = values[i];
+    const o = i * 4;
+    out.data[o] = v;
+    out.data[o + 1] = v;
+    out.data[o + 2] = v;
+    out.data[o + 3] = 255;
+  }
+  return out;
+}
+
 function morphCircular(
   data: Uint8Array,
   width: number,

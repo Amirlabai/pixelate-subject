@@ -19,7 +19,12 @@ def is_png(data: bytes) -> bool:
     return len(data) >= len(PNG_SIGNATURE) and data[: len(PNG_SIGNATURE)] == PNG_SIGNATURE
 
 
-def encode_frame_dir_to_mp4(frame_dir: Path, frame_count: int, fps: int = 30) -> bytes:
+def encode_frame_dir_to_mp4(
+    frame_dir: Path,
+    frame_count: int,
+    fps: int = 30,
+    frame_pattern: str = "frame_%04d.png",
+) -> bytes:
     if frame_count < 1:
         raise ValueError("No frames provided")
     if not ffmpeg_available():
@@ -32,7 +37,7 @@ def encode_frame_dir_to_mp4(frame_dir: Path, frame_count: int, fps: int = 30) ->
         "-framerate",
         str(fps),
         "-i",
-        str(frame_dir / "frame_%04d.png"),
+        str(frame_dir / frame_pattern),
         "-frames:v",
         str(frame_count),
         "-vf",

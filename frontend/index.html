@@ -195,7 +195,7 @@
             </label>
 
             <label class="field">
-              <span>Edge feather <strong id="val-feather">4</strong> px</span>
+              <span>Saturation edge feather <strong id="val-feather">4</strong> px</span>
               <input id="param-feather" type="range" min="0" max="20" value="4" />
             </label>
 
@@ -242,6 +242,13 @@
               30 fps, block size 4→64 px. Needs a selection unless target is Full image.
             </p>
             <p id="video-export-hint" class="field-hint video-export-hint hidden"></p>
+            <progress
+              id="video-progress"
+              class="video-progress hidden"
+              max="100"
+              value="0"
+              aria-label="Video export progress"
+            ></progress>
             <button id="btn-generate-video" type="button" class="export-btn" disabled>
               Generate Video
             </button>

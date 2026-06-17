@@ -1,6 +1,9 @@
-import { applyPixelation } from "./pixelate";
-import { renderVideo } from "./api";
 import type { AppParams, VideoEasing } from "./state";
+import {
+  downloadPixelateVideoJob,
+  getPixelateVideoJobStatus,
+  startPixelateVideoJob,
+} from "./api";
 
 const VIDEO_FPS = 30;
 const BLOCK_MIN = 4;
@@ -14,7 +17,7 @@ export interface VideoExportOptions {
     "target" | "feather" | "subjectSaturation" | "backgroundSaturation" | "videoEasing"
   >;
   durationSec: number;
-  onProgress?: (frame: number, total: number, phase: "render" | "encode") => void;
+  onProgress?: (frame: number, total: number, phase: "upload" | "render" | "encode") => void;
 }
 
 export const VIDEO_EASING_OPTIONS: { id: VideoEasing; label: string }[] = [
@@ -70,31 +73,47 @@ function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   });
 }
 
-function yieldToMain(): Promise<void> {
-  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export async function exportPixelateVideo(options: VideoExportOptions): Promise<Blob> {
   const { source, mask, params, durationSec, onProgress } = options;
-  const totalFrames = Math.max(2, Math.round(durationSec * VIDEO_FPS));
-  const frames: Blob[] = [];
 
-  for (let i = 0; i < totalFrames; i++) {
-    const blockSize = blockSizeForFrame(i, totalFrames, params.videoEasing);
-    const frameCanvas = applyPixelation(
-      source,
-      mask,
-      params.target,
-      blockSize,
-      params.feather,
-      params.subjectSaturation,
-      params.backgroundSaturation,
-    );
-    frames.push(await canvasToPngBlob(frameCanvas));
-    onProgress?.(i + 1, totalFrames, "render");
-    await yieldToMain();
+  onProgress?.(0, 0, "upload");
+  const imageBlob = await canvasToPngBlob(source);
+  const maskBlob = mask ? await canvasToPngBlob(mask) : null;
+
+  const { jobId, totalFrames } = await startPixelateVideoJob({
+    image: imageBlob,
+    mask: maskBlob,
+    target: params.target,
+    feather: params.feather,
+    subjectSaturation: params.subjectSaturation,
+    backgroundSaturation: params.backgroundSaturation,
+    durationSec,
+    easing: params.videoEasing,
+    fps: VIDEO_FPS,
+  });
+
+  let lastFrame = 0;
+  for (;;) {
+    const status = await getPixelateVideoJobStatus(jobId);
+    if (status.phase === "error") {
+      throw new Error(status.error ?? "Video job failed");
+    }
+
+    if (status.phase === "encoding") {
+      onProgress?.(status.total, status.total, "encode");
+    } else if (status.frame !== lastFrame || status.phase === "queued") {
+      lastFrame = status.frame;
+      onProgress?.(status.frame, status.total || totalFrames, "render");
+    }
+
+    if (status.done) {
+      return downloadPixelateVideoJob(jobId);
+    }
+
+    await sleep(250);
   }
-
-  onProgress?.(totalFrames, totalFrames, "encode");
-  return renderVideo(frames, VIDEO_FPS);
 }
