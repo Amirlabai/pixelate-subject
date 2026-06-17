@@ -25,6 +25,14 @@
             <li>Shift + wheel — pan sideways</li>
           </ul>
         </details>
+        <nav class="tab-bar" aria-label="Workflow mode">
+          <button id="tab-pixelate" type="button" class="tab active" aria-selected="true">
+            Pixelate
+          </button>
+          <button id="tab-edge-stretch" type="button" class="tab" aria-selected="false">
+            Edge stretch
+          </button>
+        </nav>
       </header>
 
       <main class="layout">
@@ -178,6 +186,7 @@
         </section>
 
         <aside class="sidebar sidebar-right" aria-label="Pixelation and export">
+          <div id="panel-pixelate-tab">
           <section class="panel">
             <h2>Pixelation</h2>
             <fieldset class="field fieldset">
@@ -254,6 +263,63 @@
             </button>
             <button id="btn-download" type="button" class="export-btn" disabled>Download Result</button>
           </section>
+          </div>
+
+          <div id="panel-edge-stretch-tab" class="hidden">
+          <section class="panel">
+            <h2>Edge stretch</h2>
+            <p class="field-hint">
+              Stretch masked edge colors to the image border. Subject inside the mask stays sharp.
+            </p>
+
+            <fieldset class="field fieldset">
+              <legend>Direction</legend>
+              <div class="radio-row">
+                <label
+                  ><input type="radio" name="stretch-direction" value="horizontal" checked />
+                  Horizontal</label
+                >
+                <label
+                  ><input type="radio" name="stretch-direction" value="vertical" /> Vertical</label
+                >
+              </div>
+            </fieldset>
+
+            <fieldset class="field fieldset">
+              <legend>Preview</legend>
+              <div class="radio-row">
+                <label
+                  ><input
+                    id="stretch-preview-original"
+                    type="radio"
+                    name="stretch-preview"
+                    value="original"
+                    checked
+                  />
+                  Original</label
+                >
+                <label
+                  ><input
+                    id="stretch-preview-result"
+                    type="radio"
+                    name="stretch-preview"
+                    value="result"
+                    disabled
+                  />
+                  Result (after Apply)</label
+                >
+              </div>
+            </fieldset>
+
+            <div class="button-row panel-action">
+              <button id="btn-apply-stretch" type="button" disabled>Apply Edge Stretch</button>
+            </div>
+
+            <button id="btn-download-stretch" type="button" class="export-btn" disabled>
+              Download Result
+            </button>
+          </section>
+          </div>
         </aside>
       </main>
     </div>

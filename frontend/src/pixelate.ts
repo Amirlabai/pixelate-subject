@@ -1,5 +1,6 @@
-import type { PixelateTarget } from "./state";
+import { fillOutwardUnderMask } from "./edge-fill";
 import { dilateBinaryMask } from "./mask-postprocess";
+import type { PixelateTarget } from "./state";
 
 function clampByte(v: number): number {
   return Math.max(0, Math.min(255, Math.round(v)));
@@ -136,54 +137,6 @@ function featherMask(maskData: ImageData, radius: number): Uint8ClampedArray {
   for (let i = 0; i < width * height; i++) {
     out[i] = blurred[i * 4];
   }
-  return out;
-}
-
-function fillOutwardUnderMask(
-  image: ImageData,
-  mask: ImageData,
-  radius: number,
-  threshold = 128,
-): ImageData {
-  const { width, height } = image;
-  const out = new ImageData(width, height);
-  out.data.set(image.data);
-
-  if (radius <= 0) return out;
-
-  const size = width * height;
-  const extended = new Uint8Array(size);
-  for (let i = 0; i < size; i++) {
-    extended[i] = mask.data[i * 4] >= threshold ? 1 : 0;
-  }
-
-  const dst = out.data;
-
-  for (let step = 0; step < radius; step++) {
-    const prev = new Uint8Array(extended);
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const i = y * width + x;
-        if (prev[i]) continue;
-
-        const o = i * 4;
-        let no = -1;
-
-        if (x > 0 && prev[i - 1]) no = (i - 1) * 4;
-        else if (x < width - 1 && prev[i + 1]) no = (i + 1) * 4;
-        else if (y > 0 && prev[i - width]) no = (i - width) * 4;
-        else if (y < height - 1 && prev[i + width]) no = (i + width) * 4;
-
-        if (no >= 0) {
-          dst[o] = dst[no];
-          dst[o + 1] = dst[no + 1];
-          dst[o + 2] = dst[no + 2];
-          extended[i] = 1;
-        }
-      }
-    }
-  }
-
   return out;
 }
 

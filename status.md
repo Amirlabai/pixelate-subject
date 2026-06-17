@@ -7,6 +7,7 @@
 - [x] Client-side pixelation with subject/background toggle
 - [x] General crop tool (source + mask)
 - [x] Animated MP4 export (30 fps, block 4→64 px ease-out default, ffmpeg)
+- [x] Edge stretch tab — horizontal or vertical stretch to image border
 
 ## Completed
 
@@ -22,6 +23,7 @@
 - Semantic release GitHub Actions (`fix`/`feat`/`major` → semver tags + releases)
 - Layer-overlay pixelation: sharp + pixelated layers; subject mode uses outward fill + dilated block inclusion; background uses full pixelate + sharp subject overlay
 - Server-side video export: `POST /api/pixelate-video` renders all frames on backend (Pillow/numpy) then ffmpeg; browser uploads source + mask once
+- Edge stretch tab: top-level Pixelate | Edge stretch tabs; shared import/detect/mask; horizontal or vertical stretch to image border
 
 ## Next steps
 

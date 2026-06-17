@@ -1,3 +1,5 @@
+export type AppTab = "pixelate" | "edge-stretch";
+export type StretchDirection = "horizontal" | "vertical";
 export type PixelateTarget = "subject" | "background" | "full";
 export type PreviewMode = "original" | "result";
 export type BrushMode = "add" | "remove";
@@ -11,6 +13,7 @@ export type VideoEasing =
   | "ease-out-cubic";
 
 export interface AppParams {
+  stretchDirection: StretchDirection;
   target: PixelateTarget;
   blockSize: number;
   feather: number;
@@ -29,6 +32,7 @@ export interface AppParams {
 }
 
 export interface AppState {
+  activeTab: AppTab;
   maskCanvas: HTMLCanvasElement | null;
   resultCanvas: HTMLCanvasElement | null;
   params: AppParams;
@@ -39,6 +43,7 @@ export interface AppState {
 
 export function createDefaultParams(): AppParams {
   return {
+    stretchDirection: "horizontal",
     target: "subject",
     blockSize: 16,
     feather: 4,
@@ -59,6 +64,7 @@ export function createDefaultParams(): AppParams {
 
 export function createInitialState(): AppState {
   return {
+    activeTab: "pixelate",
     maskCanvas: null,
     resultCanvas: null,
     params: createDefaultParams(),

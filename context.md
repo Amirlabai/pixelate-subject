@@ -2,14 +2,18 @@
 
 ## Purpose
 
-Pixelate Subject is a local web tool for privacy editing: upload a photo, auto-detect the foreground subject with rembg, refine the selection with a brush, optionally crop the frame, apply block pixelation to either the subject or the background, and export a still image or animated MP4.
+Pixelate Subject is a local web tool for privacy editing: upload a photo, auto-detect the foreground subject with rembg, refine the selection with a brush, optionally crop the frame, then either apply block pixelation or edge-stretch smearing, and export a still image or animated MP4 (pixelate tab only).
 
 ## Architecture
 
 - **Frontend** — Vite + TypeScript on `http://localhost:5173`
 - **Backend** — FastAPI + rembg on `http://localhost:8000`
-- Segmentation runs server-side; pixelation, mask editing, crop, and frame rendering run in the browser.
+- Segmentation runs server-side; pixelation, edge stretch, mask editing, crop, and frame rendering run in the browser.
 - Video MP4 encoding runs server-side via ffmpeg (`POST /api/render-video` legacy; `POST /api/pixelate-video` renders frames on server then encodes).
+
+## Edge stretch (Edge stretch tab)
+
+Client-side edge stretch (`frontend/src/edge-stretch.ts`, `fillDirectionalToEdges` in `frontend/src/edge-fill.ts`) keeps pixels inside the mask sharp and stretches the nearest masked edge color to the image border horizontally or vertically.
 
 ## Pixelation compositing
 
@@ -25,6 +29,12 @@ Client-side pixelation (`frontend/src/pixelate.ts`) builds two full-image layers
 | Refine edges | off | Alpha matting on re-detect |
 | Cutoff | 100 | 30–200, live after detection |
 | Grow / shrink | 0 | −12 to +12 px, live after detection |
+
+### Edge stretch
+
+| Parameter | Default | Notes |
+|-----------|---------|-------|
+| Direction | horizontal | horizontal / vertical — stretches to image border |
 
 ### Pixelation
 

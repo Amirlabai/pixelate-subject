@@ -8,6 +8,7 @@ import {
   fullImageCrop,
   isCropAspectPreset,
 } from "./crop-editor";
+import { applyEdgeStretch } from "./edge-stretch";
 import { MaskEditor } from "./mask-editor";
 import { imageDataFromMaskImage, processMask } from "./mask-postprocess";
 import { applyPixelation, createSourceCanvas } from "./pixelate";
@@ -17,6 +18,7 @@ import {
   fitPreviewSize,
   type AppParams,
   type AppState,
+  type AppTab,
   type BrushMode,
 } from "./state";
 import { exportPixelateVideo, isVideoEasing, VIDEO_EASING_OPTIONS } from "./video-export";
@@ -64,6 +66,7 @@ class App {
   private ffmpegAvailable = false;
   private isGeneratingVideo = false;
   private isApplyingPixelation = false;
+  private isApplyingStretch = false;
 
   constructor() {
     const canvas = getElAs<HTMLCanvasElement>("main-canvas");
@@ -149,10 +152,15 @@ class App {
 
     getEl("btn-detect").addEventListener("click", () => void this.detectSubject());
     getEl("btn-apply").addEventListener("click", () => void this.applyPixelation());
+    getEl("btn-apply-stretch").addEventListener("click", () => void this.applyEdgeStretchEffect());
     getEl("btn-reset-mask").addEventListener("click", () => this.resetMask());
-    getEl("btn-download").addEventListener("click", () => this.downloadResult());
+    getEl("btn-download").addEventListener("click", () => this.downloadResult("pixelated.png"));
+    getEl("btn-download-stretch").addEventListener("click", () => this.downloadResult("edge-stretch.png"));
     getEl("btn-generate-video").addEventListener("click", () => void this.generateVideo());
     getEl("btn-undo").addEventListener("click", () => this.undoMask());
+
+    getEl("tab-pixelate").addEventListener("click", () => this.setActiveTab("pixelate"));
+    getEl("tab-edge-stretch").addEventListener("click", () => this.setActiveTab("edge-stretch"));
 
     getEl("btn-crop").addEventListener("click", () => this.enterCropMode());
     getEl("btn-crop-apply").addEventListener("click", () => this.applyCrop());
@@ -212,7 +220,9 @@ class App {
         if (value === "subject" || value === "background" || value === "full") {
           this.state.params.target = value;
           this.updateButtons();
-          if (this.state.hasResult) void this.applyPixelation(false);
+          if (this.state.hasResult && this.state.activeTab === "pixelate") {
+            void this.applyPixelation(false);
+          }
         }
       });
     });
@@ -224,6 +234,34 @@ class App {
           if (value === "result" && !this.state.hasResult) {
             getElAs<HTMLInputElement>("preview-original").checked = true;
             this.setStatus("Apply pixelation first to preview the result.");
+            return;
+          }
+          this.state.params.previewMode = value;
+          this.redraw();
+          if (value === "result") this.canvasView.hideBrushCursor();
+        }
+      });
+    });
+
+    document.querySelectorAll('input[name="stretch-direction"]').forEach((el) => {
+      el.addEventListener("change", (e) => {
+        const value = (e.target as HTMLInputElement).value;
+        if (value === "horizontal" || value === "vertical") {
+          this.state.params.stretchDirection = value;
+          if (this.state.hasResult && this.state.activeTab === "edge-stretch") {
+            void this.applyEdgeStretchEffect(false);
+          }
+        }
+      });
+    });
+
+    document.querySelectorAll('input[name="stretch-preview"]').forEach((el) => {
+      el.addEventListener("change", (e) => {
+        const value = (e.target as HTMLInputElement).value;
+        if (value === "original" || value === "result") {
+          if (value === "result" && !this.state.hasResult) {
+            getElAs<HTMLInputElement>("stretch-preview-original").checked = true;
+            this.setStatus("Apply edge stretch first to preview the result.");
             return;
           }
           this.state.params.previewMode = value;
@@ -315,7 +353,7 @@ class App {
         key === "subjectSaturation" ||
         key === "backgroundSaturation"
       ) {
-        if (this.state.hasResult) {
+        if (this.state.hasResult && this.state.activeTab === "pixelate") {
           void this.applyPixelation(false);
         }
       }
@@ -326,13 +364,15 @@ class App {
     input.addEventListener("input", () => apply(Number(input.value)));
     if (key === "blockSize") {
       input.addEventListener("change", () => {
-        if (this.state.hasResult) void this.applyPixelation(false);
+        if (this.state.hasResult && this.state.activeTab === "pixelate") {
+          void this.applyPixelation(false);
+        }
       });
     }
     input.addEventListener("dblclick", (e) => {
       e.preventDefault();
       apply(defaults[key] as number);
-      if (key === "blockSize" && this.state.hasResult) {
+      if (key === "blockSize" && this.state.hasResult && this.state.activeTab === "pixelate") {
         void this.applyPixelation(false);
       }
     });
@@ -421,23 +461,90 @@ class App {
     this.updateBrushCursorFromLastEvent();
   }
 
+  private clearResult(): void {
+    this.state.hasResult = false;
+    this.state.resultCanvas = null;
+    this.state.params.previewMode = "original";
+    this.canvasView.setResult(null);
+    getElAs<HTMLInputElement>("preview-original").checked = true;
+    getElAs<HTMLInputElement>("stretch-preview-original").checked = true;
+  }
+
+  private setPreviewResult(): void {
+    this.state.params.previewMode = "result";
+    if (this.state.activeTab === "edge-stretch") {
+      getElAs<HTMLInputElement>("stretch-preview-result").checked = true;
+    } else {
+      getElAs<HTMLInputElement>("preview-result").checked = true;
+    }
+    this.canvasView.hideBrushCursor();
+  }
+
+  private setActiveTab(tab: AppTab): void {
+    if (this.state.activeTab === tab) return;
+    this.state.activeTab = tab;
+    this.clearResult();
+
+    getEl("tab-pixelate").classList.toggle("active", tab === "pixelate");
+    getEl("tab-edge-stretch").classList.toggle("active", tab === "edge-stretch");
+    getElAs<HTMLButtonElement>("tab-pixelate").setAttribute("aria-selected", tab === "pixelate" ? "true" : "false");
+    getElAs<HTMLButtonElement>("tab-edge-stretch").setAttribute(
+      "aria-selected",
+      tab === "edge-stretch" ? "true" : "false",
+    );
+
+    getEl("panel-pixelate-tab").classList.toggle("hidden", tab !== "pixelate");
+    getEl("panel-edge-stretch-tab").classList.toggle("hidden", tab !== "edge-stretch");
+
+    this.redraw();
+    this.updateButtons();
+    this.setStatus(
+      tab === "pixelate"
+        ? "Pixelate mode. Detect subject, refine mask, then apply pixelation."
+        : "Edge stretch mode. Detect subject, refine mask, then apply edge stretch.",
+    );
+  }
+
   private updateButtons(): void {
     const hasImage = !!this.sourceCanvas;
     const hasSelection = this.maskEditor?.hasSelection() ?? false;
     const needsMask = this.state.params.target !== "full";
     const inCrop = this.state.cropMode;
+    const onPixelateTab = this.state.activeTab === "pixelate";
+    const onStretchTab = this.state.activeTab === "edge-stretch";
+
     getElAs<HTMLButtonElement>("btn-detect").disabled = !hasImage || inCrop;
     getElAs<HTMLButtonElement>("btn-apply").disabled =
-      !hasImage || (needsMask && !hasSelection) || inCrop || this.isApplyingPixelation || this.isGeneratingVideo;
+      !onPixelateTab ||
+      !hasImage ||
+      (needsMask && !hasSelection) ||
+      inCrop ||
+      this.isApplyingPixelation ||
+      this.isGeneratingVideo;
+    getElAs<HTMLButtonElement>("btn-apply-stretch").disabled =
+      !onStretchTab ||
+      !hasImage ||
+      !hasSelection ||
+      inCrop ||
+      this.isApplyingStretch ||
+      this.isGeneratingVideo;
     getElAs<HTMLButtonElement>("btn-reset-mask").disabled =
       !hasImage || (!hasSelection && !this.rawMaskData) || inCrop;
-    getElAs<HTMLButtonElement>("btn-download").disabled = !this.state.hasResult || inCrop;
-    getElAs<HTMLInputElement>("preview-result").disabled = !this.state.hasResult || inCrop;
+    getElAs<HTMLButtonElement>("btn-download").disabled =
+      !onPixelateTab || !this.state.hasResult || inCrop;
+    getElAs<HTMLButtonElement>("btn-download-stretch").disabled =
+      !onStretchTab || !this.state.hasResult || inCrop;
+    getElAs<HTMLInputElement>("preview-result").disabled =
+      !onPixelateTab || !this.state.hasResult || inCrop;
+    getElAs<HTMLInputElement>("stretch-preview-result").disabled =
+      !onStretchTab || !this.state.hasResult || inCrop;
     if (!this.state.hasResult && this.state.params.previewMode === "result") {
       this.state.params.previewMode = "original";
       getElAs<HTMLInputElement>("preview-original").checked = true;
+      getElAs<HTMLInputElement>("stretch-preview-original").checked = true;
     }
     getElAs<HTMLButtonElement>("btn-generate-video").disabled =
+      !onPixelateTab ||
       !hasImage ||
       this.isGeneratingVideo ||
       inCrop ||
@@ -465,7 +572,10 @@ class App {
       if (this.state.cropMode) {
         label = "Crop mode — drag handles to trim the frame";
       } else if (this.state.params.previewMode === "result" && this.state.hasResult) {
-        label = "Pixelated result preview";
+        label =
+          this.state.activeTab === "edge-stretch"
+            ? "Edge stretch result preview"
+            : "Pixelated result preview";
       } else {
         label = "Image preview — pointer only for brush and crop";
       }
@@ -759,11 +869,52 @@ class App {
 
       this.redraw();
       this.updateButtons();
-      this.setStatus("Subject detected. Tune cutoff or grow/shrink, then apply pixelation.");
+      this.setStatus(
+        this.state.activeTab === "edge-stretch"
+          ? "Subject detected. Tune cutoff or grow/shrink, then apply edge stretch."
+          : "Subject detected. Tune cutoff or grow/shrink, then apply pixelation.",
+      );
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : "Segmentation failed", "error");
     } finally {
       btn.disabled = false;
+      this.updateButtons();
+    }
+  }
+
+  private async applyEdgeStretchEffect(showStatus = true): Promise<void> {
+    if (this.isApplyingStretch || !this.sourceCanvas || !this.maskEditor?.hasSelection()) return;
+
+    const btn = getElAs<HTMLButtonElement>("btn-apply-stretch");
+    const prevLabel = btn.textContent ?? "Apply Edge Stretch";
+    this.isApplyingStretch = true;
+    btn.setAttribute("aria-busy", "true");
+    btn.textContent = "Applying…";
+    this.setStatus("Applying edge stretch in browser…", "busy");
+    this.updateButtons();
+    await this.flushUi();
+
+    try {
+      const result = applyEdgeStretch(
+        this.sourceCanvas,
+        this.maskEditor.canvas,
+        this.state.params.stretchDirection,
+      );
+      this.state.resultCanvas = result;
+      this.state.hasResult = true;
+      this.canvasView.setResult(result);
+      this.setPreviewResult();
+      this.redraw();
+      this.updateButtons();
+      if (showStatus) {
+        this.setStatus("Edge stretch applied. Download or switch preview to Original.");
+      }
+    } catch (err) {
+      this.setStatus(err instanceof Error ? err.message : "Edge stretch failed", "error");
+    } finally {
+      this.isApplyingStretch = false;
+      btn.removeAttribute("aria-busy");
+      btn.textContent = prevLabel;
       this.updateButtons();
     }
   }
@@ -798,10 +949,11 @@ class App {
       this.state.resultCanvas = result;
       this.state.hasResult = true;
       this.canvasView.setResult(result);
+      this.setPreviewResult();
       this.redraw();
       this.updateButtons();
       if (showStatus) {
-        this.setStatus("Pixelation applied. Switch preview to Result or download.");
+        this.setStatus("Pixelation applied. Download or switch preview to Original.");
       }
     } catch (err) {
       this.setStatus(err instanceof Error ? err.message : "Pixelation failed", "error");
@@ -924,7 +1076,7 @@ class App {
     this.updateWorkspaceChrome();
   }
 
-  private downloadResult(): void {
+  private downloadResult(filename: string): void {
     const canvas = this.state.resultCanvas;
     if (!canvas) return;
 
@@ -933,7 +1085,7 @@ class App {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = "pixelated.png";
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
       this.setStatus("Download started.");

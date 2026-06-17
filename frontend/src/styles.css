@@ -17,6 +17,10 @@ body {
   color: #e8eaed;
 }
 
+.hidden {
+  display: none !important;
+}
+
 .app {
   height: 100dvh;
   max-width: none;
@@ -30,6 +34,39 @@ body {
 .header {
   flex-shrink: 0;
   margin-bottom: 0.5rem;
+}
+
+.tab-bar {
+  display: flex;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+}
+
+.tab {
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #9aa0a6;
+  background: #1a1d24;
+  border: 1px solid #2a2f3a;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tab:hover:not(.active) {
+  color: #e8eaed;
+  border-color: #3c4454;
+}
+
+.tab.active {
+  color: #e8eaed;
+  background: #2a3f66;
+  border-color: #5b8def;
+}
+
+.tab:focus-visible {
+  outline: 2px solid #5b8def;
+  outline-offset: 2px;
 }
 
 .header-row {
